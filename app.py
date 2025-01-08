@@ -28,11 +28,6 @@ pc = pinecone.Pinecone(
 )
 
 
-# cred = credentials.Certificate(r"C:\Users\01\Downloads\expenss-1d5ec-firebase-adminsdk-phyv2-0cb75b2646.json")
-# firebase_admin.initialize_app(cred, {
-#     'storageBucket': 'expenss-1d5ec.appspot.com'
-# })
-
 firebase_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") 
 cred = credentials.Certificate(json.loads(firebase_credentials)) 
 firebase_admin.initialize_app(cred, { 'storageBucket': 'expenss-1d5ec.appspot.com' })
@@ -48,13 +43,6 @@ def get_pdf_text(pdf_path):
         text += page.extract_text()
     return text
 
-# def get_pdf_text_from_url(url):
-#     response = requests.get(url)
-#     pdf_reader = PdfReader(BytesIO(response.content))
-#     text = ""
-#     for page in pdf_reader.pages:
-#         text += page.extract_text()
-#     return text
 
 def get_pdf_text_from_url(url):
     response = requests.get(url)
@@ -119,29 +107,10 @@ def user_input(user_question, user_id):
     response = chain({"input_documents": docs, "context": context, "question": user_question}, return_only_outputs=True)
     return response["output_text"]
 
-# @app.route('/upload', methods=['POST'])
-# def upload_pdf():
-    try:
-        file = request.files['file']
-        user_id = request.form['user_id']
-        file_name = f"uploaded_{user_id}.pdf"
-        # file.save(file_name)
-
-        # Upload to Firebase Storage
-        bucket = storage.bucket()
-        blob = bucket.blob(file_name)
-        blob.upload_from_filename(file)
-        blob.make_public()
-        file_url = blob.public_url
-
-        # Process the PDF from the URL
-        raw_text = get_pdf_text_from_url(file_url)
-        text_chunks = get_text_chunks(raw_text)
-        get_vector_store(text_chunks, user_id)
-
-        return jsonify({"message": "PDF processed successfully", "file_url": file_url})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@app.route('/')
+# ‘/’ URL is bound with hello_world() function.
+def hello_world():
+    return 'Hello World'
 
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
