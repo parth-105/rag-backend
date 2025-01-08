@@ -12,6 +12,11 @@ from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
 import pinecone
 import re
+import firebase_admin
+from firebase_admin import credentials, storage
+import requests
+from io import BytesIO
+import json
 
 load_dotenv()
 os.getenv("GOOGLE_API_KEY")
@@ -22,16 +27,43 @@ pc = pinecone.Pinecone(
     api_key=os.getenv("PINECONE_API_KEY")
 )
 
+
+# cred = credentials.Certificate(r"C:\Users\01\Downloads\expenss-1d5ec-firebase-adminsdk-phyv2-0cb75b2646.json")
+# firebase_admin.initialize_app(cred, {
+#     'storageBucket': 'expenss-1d5ec.appspot.com'
+# })
+
+firebase_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") 
+cred = credentials.Certificate(json.loads(firebase_credentials)) 
+firebase_admin.initialize_app(cred, { 'storageBucket': 'expenss-1d5ec.appspot.com' })
+
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
+CORS(app, resources={r"/*": {"origins": "https://chatpdf-one-ebon.vercel.app"}})
 # CORS(app)
 
-def get_pdf_text(file):
+def get_pdf_text(pdf_path):
     text = ""
-    pdf_reader = PdfReader(file)
+    pdf_reader = PdfReader(pdf_path)
     for page in pdf_reader.pages:
         text += page.extract_text()
     return text
+
+# def get_pdf_text_from_url(url):
+#     response = requests.get(url)
+#     pdf_reader = PdfReader(BytesIO(response.content))
+#     text = ""
+#     for page in pdf_reader.pages:
+#         text += page.extract_text()
+#     return text
+
+def get_pdf_text_from_url(url):
+    response = requests.get(url)
+    pdf_reader = PdfReader(BytesIO(response.content))
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+
 
 def get_text_chunks(text):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -87,17 +119,53 @@ def user_input(user_question, user_id):
     response = chain({"input_documents": docs, "context": context, "question": user_question}, return_only_outputs=True)
     return response["output_text"]
 
+# @app.route('/upload', methods=['POST'])
+# def upload_pdf():
+    try:
+        file = request.files['file']
+        user_id = request.form['user_id']
+        file_name = f"uploaded_{user_id}.pdf"
+        # file.save(file_name)
+
+        # Upload to Firebase Storage
+        bucket = storage.bucket()
+        blob = bucket.blob(file_name)
+        blob.upload_from_filename(file)
+        blob.make_public()
+        file_url = blob.public_url
+
+        # Process the PDF from the URL
+        raw_text = get_pdf_text_from_url(file_url)
+        text_chunks = get_text_chunks(raw_text)
+        get_vector_store(text_chunks, user_id)
+
+        return jsonify({"message": "PDF processed successfully", "file_url": file_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
     try:
         file = request.files['file']
         user_id = request.form['user_id']
-        raw_text = get_pdf_text(file)
+        file_name = f"uploaded_{user_id}.pdf"
+
+        # Upload to Firebase Storage directly from memory
+        bucket = storage.bucket()
+        blob = bucket.blob(file_name)
+        blob.upload_from_file(file)
+        blob.make_public()
+        file_url = blob.public_url
+
+        # Process the PDF from the URL
+        raw_text = get_pdf_text_from_url(file_url)
         text_chunks = get_text_chunks(raw_text)
         get_vector_store(text_chunks, user_id)
-        return jsonify({"message": "PDF processed successfully"})
+
+        return jsonify({"message": "PDF processed successfully", "file_url": file_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
@@ -111,4 +179,4 @@ def ask_question():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
