@@ -110,7 +110,7 @@ def user_input(user_question, user_id):
 @app.route('/')
 # ‘/’ URL is bound with hello_world() function.
 def hello_world():
-    return 'Hello World'
+    return 'Hello World how are you'
 
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
